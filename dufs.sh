@@ -3,6 +3,7 @@
 # ============================================
 # Dufs 交互式部署脚本
 # 功能：配置目录、端口、权限、隐藏目录等
+#       自动为隐藏目录创建空 index.html
 # ============================================
 
 set -e
@@ -49,7 +50,6 @@ get_input() {
         echo -e "${RED}目录不能为空，请重新输入。${NC}"
         read -p "> " SHARE_DIR
     done
-    # 如果目录不存在，创建
     if [ ! -d "$SHARE_DIR" ]; then
         echo -e "${YELLOW}目录不存在，正在创建...${NC}"
         mkdir -p "$SHARE_DIR"
@@ -78,8 +78,11 @@ get_input() {
     echo -e "${BLUE}请输入要隐藏的目录名（多个用逗号分隔，例如 A,B,private），留空则不隐藏：${NC}"
     read -p "> " HIDDEN_DIRS
     if [ -n "$HIDDEN_DIRS" ]; then
+        # 将逗号分隔转为空格分隔，用于后续循环
+        HIDDEN_DIRS_SPACE=$(echo "$HIDDEN_DIRS" | tr ',' ' ')
         HIDDEN_FLAG="--hidden \"$HIDDEN_DIRS\""
     else
+        HIDDEN_DIRS_SPACE=""
         HIDDEN_FLAG=""
     fi
 
@@ -90,9 +93,23 @@ get_input() {
     RENDER_TRY=${RENDER_TRY:-n}
     if [[ "$RENDER_TRY" =~ ^[Yy]$ ]]; then
         RENDER_FLAG="--render-try-index"
-        # 提示用户可以在隐藏目录下放 index.html
-        if [ -n "$HIDDEN_DIRS" ]; then
-            echo -e "${GREEN}提示：你可以在隐藏目录（如 ${HIDDEN_DIRS%%%,*}）下放置 index.html 来自定义访问该目录时的显示内容。${NC}"
+        # 如果指定了隐藏目录，自动创建空 index.html
+        if [ -n "$HIDDEN_DIRS_SPACE" ]; then
+            echo -e "${GREEN}将为隐藏目录自动创建空的 index.html，以防止显示文件列表。${NC}"
+            for dir in $HIDDEN_DIRS_SPACE; do
+                # 在共享目录下创建对应的目录（如果不存在）和 index.html
+                TARGET_DIR="$SHARE_DIR/$dir"
+                if [ ! -d "$TARGET_DIR" ]; then
+                    echo -e "${YELLOW}目录 $TARGET_DIR 不存在，自动创建。${NC}"
+                    mkdir -p "$TARGET_DIR"
+                fi
+                if [ ! -f "$TARGET_DIR/index.html" ]; then
+                    echo -e "${GREEN}创建 $TARGET_DIR/index.html${NC}"
+                    echo "" > "$TARGET_DIR/index.html"
+                else
+                    echo -e "${YELLOW}$TARGET_DIR/index.html 已存在，跳过。${NC}"
+                fi
+            done
         fi
     else
         RENDER_FLAG=""
